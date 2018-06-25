@@ -21,7 +21,7 @@ namespace newsscraper.Web.Controllers
 
         // GET api/search?text=query
         [HttpGet]
-        public IEnumerable<DAL.Entities.Article> Index(string text)
+        public IEnumerable<DAL.SearchHit> Index(string text)
         {
             return _articlesRepository.GetContainingText(text);
         }

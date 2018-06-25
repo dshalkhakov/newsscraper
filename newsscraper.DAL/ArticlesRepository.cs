@@ -18,7 +18,7 @@ namespace newsscraper.DAL
         IEnumerable<string> GetTopTenWords();
 
         IEnumerable<Article> GetByDate(DateTime from, DateTime to);
-        IEnumerable<Article> GetContainingText(string text);
+        IEnumerable<SearchHit> GetContainingText(string text);
     }
 
     public class ArticlesRepository : IArticlesRepository
@@ -31,6 +31,11 @@ namespace newsscraper.DAL
         const string TopTenWordsQuery = @"SELECT * FROM ts_stat('SELECT to_tsvector(''russian'', ""Title"") || to_tsvector(''russian'', ""Contents"") FROM ""Articles""')
 ORDER BY nentry DESC, ndoc DESC, word
 LIMIT 10";
+        const string SearchQuery = @"SELECT ""Uri"", ts_headline('russian',
+  ""Title"" || ' ' || ""Contents"", phraseto_tsquery(@Phrase))
+from ""Articles""
+where to_tsvector('russian', ""Title"" || ' ' || ""Contents"")
+  @@ phraseto_tsquery(@Phrase)";
 
         public ArticlesRepository(ScraperContext ctx)
         {
@@ -55,12 +60,24 @@ LIMIT 10";
                 .ToList();
         }
 
-        public IEnumerable<Article> GetContainingText(string text)
+        public IEnumerable<SearchHit> GetContainingText(string text)
         {
+#if false
             return _ctx.Articles
                 .AsNoTracking()
                 .Where(e => EF.Functions.ToTsVector("russian", e.Title + " " + e.Contents).Matches(EF.Functions.PhraseToTsQuery(text)))
                 .ToList();
+#else
+            Func<System.Data.IDataReader, SearchHit> map =
+                reader => new SearchHit()
+                {
+                    Uri = reader["Uri"].ToString(),
+                    Headline = reader["ts_headline"].ToString()
+                };
+
+            return _ctx.RawQuery<SearchHit>(SearchQuery, map, Tuple.Create("Phrase", text));
+#endif
+
         }
 
         public Article GetById(int articleId)
@@ -84,7 +101,6 @@ LIMIT 10";
             Func<System.Data.IDataReader, string> map = reader => reader["word"].ToString();
 
             return _ctx.RawQuery<string>(TopTenWordsQuery, map);
-            throw new NotImplementedException();
         }
     }
 }
